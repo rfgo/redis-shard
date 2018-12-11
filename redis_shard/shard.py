@@ -12,6 +12,7 @@ from redis.sentinel import Sentinel
 from .commands import SHARD_METHODS
 from ._compat import basestring, iteritems
 from .hashring import HashRing
+from .hashring import MurmurHashRing
 from .helpers import format_servers
 from .pipeline import Pipeline
 from .sentinel import SentinelRedis
@@ -37,7 +38,7 @@ def list_or_args(keys, args):
 
 class RedisShardAPI(object):
 
-    def __init__(self, servers, hash_method='crc32', sentinel=None, strict_redis=False):
+    def __init__(self, servers, hash_method='murmur', sentinel=None, strict_redis=False):
         self.nodes = []
         self.connections = {}
         self.pool = None
@@ -57,7 +58,10 @@ class RedisShardAPI(object):
                 self.connections[name] = redis.Redis(**server_config)
             server_config['name'] = name
             self.nodes.append(name)
-        self.ring = HashRing(self.nodes, hash_method=hash_method)
+        if hash_method != "murmur":
+            self.ring = HashRing(self.nodes, hash_method=hash_method)
+        else:
+            self.ring = MurmurHashRing(self.nodes)
 
     def get_server_name(self, key):
         if not _PYTHON3 and not isinstance(key, bytes):

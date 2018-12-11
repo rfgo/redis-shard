@@ -9,15 +9,27 @@
 
 import zlib
 import bisect
+import operator
 from hashlib import md5, sha1
 
 from ._compat import xrange, b, long
+
+def murmur(s):
+    import murmur2
+    
+    def to_java_long(pyLong):
+        #max long value in java  
+        if(pyLong > 9223372036854775807):
+            pyLong = (pyLong+2**63)%2**63 - 2**63
+        return pyLong
+    return to_java_long(murmur2.murmur64a(s, len(s), 0x1234ABCD))
 
 
 hash_methods = {
     'crc32': lambda x: zlib.crc32(x) & 0xffffffff,
     'md5': lambda x: long(md5(x).hexdigest(), 16),
     'sha1': lambda x: long(sha1(x).hexdigest(), 16),
+    'murmur': murmur
 }
 
 
@@ -94,4 +106,29 @@ class HashRing(object):
             yield k, self.ring[k]
 
     def __call__(self, key):
-        return self.get_node(key)
+        return elf.get_node(key)
+
+
+class MurmurHashRing(object):
+
+    def __init__(self, nodes=[]):
+        self._m = []
+        for i, s in enumerate(nodes):
+            for n in range(160):
+                self._m.append((murmur("SHARD-" + str(i) + "-NODE-" + str(n)), s))
+        self._m.sort(key=operator.itemgetter(0))
+
+    def get_node(self, key):
+        v = murmur(key)
+        for k, s in self._m:
+            _s = None
+            if v <= k:
+                _s = s; break;
+            if not _s:
+                _s = self._m[0][1]
+        return _s
+        # i = bisect.bisect_left(self._m, murmur(key))
+        # if i >= len(self._m):
+        #     return self._m[0][1]
+        # else:
+        #     return self._m[i][1]
